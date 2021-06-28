@@ -1,0 +1,24 @@
+[package]
+name = "toy-payments-engine"
+version = "0.1.0"
+authors = ["Christian Perez-Llamas"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.41"
+thiserror = "1.0.25"
+rust_decimal = { version = "1.14.3", features = ["serde-str"] }
+serde = { version = "1.0.126", features = ["derive"] }
+async-trait = "0.1.50"
+futures = "0.3.15"
+tokio = { version = "1.7.1", features = ["macros", "rt", "rt-multi-thread", "io-util", "io-std", "fs"] }
+tokio-stream = "0.1.6"
+csv-async = { version = "1.2.1", features = ["tokio"] }
+
+[dev-dependencies]
+rust_decimal_macros = "1.14.3"
+# Please don't upgrade mockall to 0.10.0 until the following error has been resolved
+# https://github.com/asomers/mockall/issues/298
+mockall = "0.9.1"
+mock-it = "0.3.0"
+indoc = "1.0.3"
