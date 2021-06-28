@@ -34,13 +34,17 @@ where
     &'a mut self,
   ) -> Box<dyn Stream<Item = Result<Transaction>> + Unpin + 'a> {
     Box::new(
-      csv_async::AsyncDeserializer::from_reader(&mut self.0)
-        .into_deserialize::<super::transaction::Transaction>()
-        .map(|maybe_transaction| {
-          maybe_transaction
-            .map_err(anyhow::Error::from)
+      csv_async::AsyncReader::from_reader(&mut self.0)
+        .into_records()
+        .map(|maybe_record| {
+          maybe_record
+            .and_then(|mut record| {
+              record.trim();
+              record.deserialize::<super::transaction::Transaction>(None)
+            })
             .map(Transaction::from)
-        }),
+            .map_err(anyhow::Error::from)
+        })
     )
   }
 }
@@ -55,11 +59,11 @@ mod tests {
   #[tokio::test]
   async fn read_transactions_with_format_errors() {
     let input = indoc! { "
-      type,client,tx,amount
+      type,      client,     tx,        amount
       deposit
-      withdrawal,2,102,10.5
+       withdrawal,    2,    102,          10.5
 
-      deposit,3,202,1000
+      deposit  ,      3,    202 ,       1000
       unknown,1,2,3
     " }
     .as_bytes();
@@ -78,9 +82,9 @@ mod tests {
   #[tokio::test]
   async fn read_transactions_success() {
     let input = indoc! { "
-      type,client,tx,amount
-      deposit,1,101,100
-      withdrawal,2,102,10.5
+      type,       client,   tx,  amount
+      deposit,         1,  101,     100
+      withdrawal,      2,  102,    10.5
     " }
     .as_bytes();
 

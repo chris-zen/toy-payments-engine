@@ -9,9 +9,6 @@ use super::{
   transaction::{ClientId, Transaction, TransactionId},
 };
 
-/// Default decimal precision as number of decimals after the point
-const PRECISION: u32 = 4;
-
 pub type Result<T> = core::result::Result<T, PaymentsEngineError>;
 
 /// Possible errors that can happen while processing transactions.
@@ -214,9 +211,9 @@ impl InMemoryPaymentsEngine {
       let total = account.funds.available + account.funds.held;
       AccountReport::new(
         *client_id,
-        account.funds.available.round_dp(PRECISION),
-        account.funds.held.round_dp(PRECISION),
-        total.round_dp(PRECISION),
+        account.funds.available,
+        account.funds.held,
+        total,
         account.locked,
       )
     })
@@ -820,7 +817,7 @@ mod tests {
       1,
       Account {
         locked: false,
-        funds: Funds::available(dec!(101.00015)),
+        funds: Funds::available(dec!(100)),
         transactions: vec![(101, TransactionState::from_dispute(dec!(10)))]
           .into_iter()
           .collect(),
@@ -830,7 +827,7 @@ mod tests {
       2,
       Account {
         locked: false,
-        funds: Funds::new(dec!(200.00005), dec!(-10)),
+        funds: Funds::new(dec!(200), dec!(-10)),
         ..Account::default()
       },
     );
@@ -848,8 +845,8 @@ mod tests {
     assert_eq!(
       report,
       vec![
-        AccountReport::new(1, dec!(101.0002), dec!(0), dec!(101.0002), false),
-        AccountReport::new(2, dec!(200.0000), dec!(-10), dec!(190.0000), false),
+        AccountReport::new(1, dec!(100), dec!(0), dec!(100), false),
+        AccountReport::new(2, dec!(200), dec!(-10), dec!(190), false),
         AccountReport::new(3, dec!(300), dec!(0), dec!(300), true),
       ]
       .into_iter()
