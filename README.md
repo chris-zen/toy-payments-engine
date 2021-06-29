@@ -12,7 +12,7 @@ There are some aspects of the specification that were not fully clear, so I had 
 - A dispute over a withdrawal will retain a negative amount from the held funds into the available funds (that was a confusing point):
   `{ available: 100, held: 0, total: 100 } --[dispute of withdrawal of 10]--> { available: 110, held: -10, total: 100 }`
 - A multi-threading solution would have provided better performance for single file executions and in memory processing in theory, but I prioritized a modular end to end setup with async/await and tokio/stream that would fit better in an scenario where each batch of payments were processed through different HTTP requests, and left the multi-threading solution as a future enhancement.
-- To guarantee decimal precision I use the crate `rust_decimal` which can handle more than the specified precision of four places at the cost of using 128 bits per number. For generating the accounts report I limit the precision to four positions using the `MidpointNearestEven` strategy (AKA Bankers Rounding).
+- To guarantee decimal precision I use the crate `rust_decimal` which can handle more than the specified precision of four places at the cost of using 128 bits per number.
 - The payments engine logic is able to encode all kind of situations as errors, but the current processor implementation will ignore them and continue processing. This is intentional to follow the specifications, but at the same time to leave open the possibility to use that information as events for a fraud system or observability purposes.
 
 ## Software design
