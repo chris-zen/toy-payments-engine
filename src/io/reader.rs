@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use anyhow::Result;
 use tokio::io::AsyncRead;
 use tokio_stream::{Stream, StreamExt};
@@ -34,17 +36,22 @@ where
     &'a mut self,
   ) -> Box<dyn Stream<Item = Result<Transaction>> + Unpin + 'a> {
     Box::new(
-      csv_async::AsyncReader::from_reader(&mut self.0)
+      csv_async::AsyncReaderBuilder::new()
+        .flexible(true)
+        .create_reader(&mut self.0)
         .into_records()
         .map(|maybe_record| {
           maybe_record
             .and_then(|mut record| {
               record.trim();
+              if record.len() == 3 {
+                record.push_field("");
+              }
               record.deserialize::<super::transaction::Transaction>(None)
             })
-            .map(Transaction::from)
             .map_err(anyhow::Error::from)
-        })
+            .and_then(Transaction::try_from)
+        }),
     )
   }
 }
@@ -61,9 +68,11 @@ mod tests {
     let input = indoc! { "
       type,      client,     tx,        amount
       deposit
-       withdrawal,    2,    102,          10.5
+       withdrawal,    2,    102,       
+      withdrawal,    2,    103
 
-      deposit  ,      3,    202 ,       1000
+      deposit  ,      3,    202 ,
+      deposit  ,      3,    203
       unknown,1,2,3
     " }
     .as_bytes();
@@ -76,7 +85,8 @@ mod tests {
       .collect::<Vec<&str>>()
       .await;
 
-    assert_eq!(transactions, vec!["err", "ok", "ok", "err"])
+    assert_eq!(transactions.iter().filter(|v| **v == "err").count(), 6);
+    assert_eq!(transactions.iter().filter(|v| **v == "ok").count(), 0);
   }
 
   #[tokio::test]
@@ -84,7 +94,10 @@ mod tests {
     let input = indoc! { "
       type,       client,   tx,  amount
       deposit,         1,  101,     100
-      withdrawal,      2,  102,    10.5
+       withdrawal,     2,  102,    10.5
+      dispute,         1,  103,
+      resolve,         1,  104
+      chargeback,      1,  105,
     " }
     .as_bytes();
 
@@ -109,6 +122,18 @@ mod tests {
           transaction_id: 102,
           amount: dec!(10.5),
         }),
+        Ok(Transaction::Dispute {
+          client_id: 1,
+          transaction_id: 103,
+        }),
+        Ok(Transaction::Resolve {
+          client_id: 1,
+          transaction_id: 104,
+        }),
+        Ok(Transaction::Chargeback {
+          client_id: 1,
+          transaction_id: 105,
+        })
       ]
     )
   }

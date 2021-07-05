@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
@@ -26,35 +28,42 @@ pub struct Transaction {
   #[serde(rename = "tx")]
   transaction_id: u32,
 
-  amount: Decimal,
+  amount: Option<Decimal>,
 }
 
-impl From<Transaction> for payments::Transaction {
-  /// Conversion from a deserializable Transaction into one that can be used by the domain logic.
-  fn from(transaction: Transaction) -> Self {
+impl TryFrom<Transaction> for payments::Transaction {
+  type Error = anyhow::Error;
+
+  fn try_from(transaction: Transaction) -> Result<Self, Self::Error> {
     match transaction.kind {
-      TransactionType::Deposit => payments::Transaction::Deposit {
+      TransactionType::Deposit => transaction
+        .amount
+        .map(|amount| payments::Transaction::Deposit {
+          client_id: transaction.client_id,
+          transaction_id: transaction.transaction_id,
+          amount,
+        })
+        .ok_or_else(|| anyhow::anyhow!("Missing amount")),
+      TransactionType::Withdrawal => transaction
+        .amount
+        .map(|amount| payments::Transaction::Withdrawal {
+          client_id: transaction.client_id,
+          transaction_id: transaction.transaction_id,
+          amount,
+        })
+        .ok_or_else(|| anyhow::anyhow!("Missing amount")),
+      TransactionType::Dispute => Ok(payments::Transaction::Dispute {
         client_id: transaction.client_id,
         transaction_id: transaction.transaction_id,
-        amount: transaction.amount,
-      },
-      TransactionType::Withdrawal => payments::Transaction::Withdrawal {
+      }),
+      TransactionType::Resolve => Ok(payments::Transaction::Resolve {
         client_id: transaction.client_id,
         transaction_id: transaction.transaction_id,
-        amount: transaction.amount,
-      },
-      TransactionType::Dispute => payments::Transaction::Dispute {
+      }),
+      TransactionType::Chargeback => Ok(payments::Transaction::Chargeback {
         client_id: transaction.client_id,
         transaction_id: transaction.transaction_id,
-      },
-      TransactionType::Resolve => payments::Transaction::Resolve {
-        client_id: transaction.client_id,
-        transaction_id: transaction.transaction_id,
-      },
-      TransactionType::Chargeback => payments::Transaction::Chargeback {
-        client_id: transaction.client_id,
-        transaction_id: transaction.transaction_id,
-      },
+      }),
     }
   }
 }
@@ -67,14 +76,14 @@ mod tests {
   use super::*;
 
   #[test]
-  fn payments_transaction_from() {
+  fn payments_transaction_try_from_success() {
     let cases = vec![
       (
         Transaction {
           kind: TransactionType::Deposit,
           client_id: 1,
           transaction_id: 101,
-          amount: dec!(100),
+          amount: Some(dec!(100)),
         },
         payments::Transaction::Deposit {
           client_id: 1,
@@ -87,7 +96,7 @@ mod tests {
           kind: TransactionType::Withdrawal,
           client_id: 2,
           transaction_id: 102,
-          amount: dec!(200),
+          amount: Some(dec!(200)),
         },
         payments::Transaction::Withdrawal {
           client_id: 2,
@@ -100,7 +109,7 @@ mod tests {
           kind: TransactionType::Dispute,
           client_id: 3,
           transaction_id: 103,
-          amount: dec!(0),
+          amount: None,
         },
         payments::Transaction::Dispute {
           client_id: 3,
@@ -112,7 +121,7 @@ mod tests {
           kind: TransactionType::Resolve,
           client_id: 4,
           transaction_id: 104,
-          amount: dec!(0),
+          amount: None,
         },
         payments::Transaction::Resolve {
           client_id: 4,
@@ -124,7 +133,7 @@ mod tests {
           kind: TransactionType::Chargeback,
           client_id: 5,
           transaction_id: 105,
-          amount: dec!(0),
+          amount: None,
         },
         payments::Transaction::Chargeback {
           client_id: 5,
@@ -134,7 +143,28 @@ mod tests {
     ];
 
     for (input, expected) in cases {
-      assert_eq!(payments::Transaction::from(input), expected)
+      let tx = payments::Transaction::try_from(input);
+      assert!(tx.is_ok());
+      assert_eq!(tx.unwrap(), expected);
     }
+  }
+
+  #[test]
+  fn payments_transaction_try_from_missing_amount() {
+    assert!(payments::Transaction::try_from(Transaction {
+      kind: TransactionType::Deposit,
+      client_id: 1,
+      transaction_id: 101,
+      amount: None,
+    })
+    .is_err());
+
+    assert!(payments::Transaction::try_from(Transaction {
+      kind: TransactionType::Withdrawal,
+      client_id: 1,
+      transaction_id: 101,
+      amount: None,
+    })
+    .is_err());
   }
 }
