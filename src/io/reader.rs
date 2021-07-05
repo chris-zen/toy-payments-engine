@@ -68,6 +68,7 @@ mod tests {
     let input = indoc! { "
       type,      client,     tx,        amount
       deposit
+      deposit,,,
        withdrawal,    2,    102,       
       withdrawal,    2,    103
 
@@ -85,7 +86,7 @@ mod tests {
       .collect::<Vec<&str>>()
       .await;
 
-    assert_eq!(transactions.iter().filter(|v| **v == "err").count(), 6);
+    assert_eq!(transactions.iter().filter(|v| **v == "err").count(), 7);
     assert_eq!(transactions.iter().filter(|v| **v == "ok").count(), 0);
   }
 
@@ -98,6 +99,9 @@ mod tests {
       dispute,         1,  103,
       resolve,         1,  104
       chargeback,      1,  105,
+      dispute,         1,  106, 10.0
+      resolve,         1,  107, 1.0
+      chargeback,      1,  108, 10.0
     " }
     .as_bytes();
 
@@ -133,6 +137,18 @@ mod tests {
         Ok(Transaction::Chargeback {
           client_id: 1,
           transaction_id: 105,
+        }),
+        Ok(Transaction::Dispute {
+          client_id: 1,
+          transaction_id: 106,
+        }),
+        Ok(Transaction::Resolve {
+          client_id: 1,
+          transaction_id: 107,
+        }),
+        Ok(Transaction::Chargeback {
+          client_id: 1,
+          transaction_id: 108,
         })
       ]
     )
