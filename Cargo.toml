@@ -17,8 +17,6 @@ csv-async = { version = "1.2.1", features = ["tokio"] }
 
 [dev-dependencies]
 rust_decimal_macros = "1.14.3"
-# Please don't upgrade mockall to 0.10.0 until the following error has been resolved
-# https://github.com/asomers/mockall/issues/298
-mockall = "0.9.1"
+mockall = "0.10.1"
 mock-it = "0.3.0"
 indoc = "1.0.3"
