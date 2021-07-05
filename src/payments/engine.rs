@@ -39,6 +39,9 @@ pub enum PaymentsEngineError {
 
   #[error("Transaction {1} for client {0} is not disputed")]
   TransactionNotDisputed(ClientId, TransactionId),
+
+  #[error("Disputed more than available")]
+  DisputedMoreThanAvailable,
 }
 
 /// Interface implemented by payments processors
@@ -110,9 +113,6 @@ impl InMemoryPaymentsEngine {
         Err(PaymentsEngineError::NotEnoughAvailableFunds)
       } else {
         account.funds.available -= amount;
-        account
-          .transactions
-          .insert(transaction_id, TransactionState::from_amount(-amount));
         Ok(())
       }
     }
@@ -137,6 +137,8 @@ impl InMemoryPaymentsEngine {
           client_id,
           transaction_id,
         ))
+      } else if transaction.amount > account.funds.available {
+        Err(PaymentsEngineError::DisputedMoreThanAvailable)
       } else {
         transaction.in_dispute = true;
         account.funds.available -= transaction.amount;
@@ -497,9 +499,7 @@ mod tests {
       &Account {
         locked: false,
         funds: Funds::available(dec!(90)),
-        transactions: vec![(101, TransactionState::from_amount(dec!(-10)))]
-          .into_iter()
-          .collect(),
+        transactions: HashMap::new(),
       }
     );
   }
@@ -582,6 +582,30 @@ mod tests {
       result,
       Err(PaymentsEngineError::TransactionAlreadyDisputed(1, 101))
     );
+  }
+
+  #[tokio::test]
+  async fn process_dispute_more_than_available() {
+    let mut engine = InMemoryPaymentsEngine::new();
+    engine.accounts.insert(
+      1,
+      Account {
+        locked: false,
+        funds: Funds::available(dec!(90)),
+        transactions: vec![(101, TransactionState::from_amount(dec!(100)))]
+          .into_iter()
+          .collect(),
+      },
+    );
+    let transaction = Transaction::Dispute {
+      client_id: 1,
+      transaction_id: 101,
+    };
+
+    let result = engine.process(transaction).await;
+
+    assert!(result.is_err());
+    assert_eq!(result, Err(PaymentsEngineError::DisputedMoreThanAvailable),);
   }
 
   #[tokio::test]

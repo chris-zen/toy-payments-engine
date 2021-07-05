@@ -6,13 +6,10 @@ This is a toy project to test my Rust skills with a simple use case and certain 
 
 There are some aspects of the specification that were not fully clear, so I had to make some assumptions:
 
-- Disputes can be done over deposits and withdrawals.
-- A dispute over a deposit will retain a positive amount from the available funds into the held funds:
-  `{ available: 100, held: 0, total: 100 } --[dispute of deposit of 10]--> { available: 90, held: 10, total: 100 }`
-- A dispute over a withdrawal will retain a negative amount from the held funds into the available funds (that was a confusing point):
-  `{ available: 100, held: 0, total: 100 } --[dispute of withdrawal of 10]--> { available: 110, held: -10, total: 100 }`
-- A multi-threading solution would have provided better performance for single file executions and in memory processing in theory, but I prioritized a modular end to end setup with async/await and tokio/stream that would fit better in an scenario where each batch of payments were processed through different HTTP requests, and left the multi-threading solution as a future enhancement.
-- To guarantee decimal precision I use the crate `rust_decimal` which can handle more than the specified precision of four places at the cost of using 128 bits per number.
+- Disputes can only be done over `deposits` as described in the spec, but not over `withdrawals`, which will be discarded. This avoids possible situations of fraud.
+- Disputes can not be done if there are not enough available funds to held. This is also to avoid fraud.
+- A multi-threading solution might have provided better performance for single file executions with in memory processing, but I prioritized a modular end to end setup with async/await and tokio/stream that would fit better in an scenario where each batch of payments were processed through different HTTP requests, and left the multi-threading solution as a future enhancement.
+- To guarantee decimal precision I use the crate `rust_decimal` which can handle more than the specified precision of four places at the cost of using 128 bits per number. Amounts from the output are rescaled to a maximum of 4 decimals with rounding leveraging the half up strategy. Decimal zeroes are simplified to a single zero.
 - The payments engine logic is able to encode all kind of situations as errors, but the current processor implementation will ignore them and continue processing. This is intentional to follow the specifications, but at the same time to leave open the possibility to use that information as events for a fraud system or observability purposes.
 
 ## Software design
@@ -34,9 +31,9 @@ The overall architecture looks like:
 
 ## Limitations and future plans
 
-I focused on having an end to end that could show the full solution working, and was easily adapted to the scenario of processing payments as micro-batches through HTTP or some other network protocol (mostly IO bound). My plan was to add multi-threading capabilities after that, but then I realized that it would be completely out of time, so I ended having an async solution that might not show the best performance in the automated tests, where only one file is processed per run, and the in-memory implementation of payments is mostly CPU bound.
+I focused on having an end to end that could show the full solution working, and was easily adapted to the scenario of processing payments as micro-batches through HTTP or some other network protocol (mostly IO bound). My plan was to add multi-threading capabilities after that, but then I realized that it would be completely out of time, so I ended having an async solution that might not show the best performance in the automated tests, where only one file is processed per run, and the in-memory payments uses mostly CPU.
 
-The idea to introduce multi-threading was to keep the async code as it is, but build an advanced implementation of the trait `PaymentsEngine` that would launch multiple threads, with one independent `InMemoryPaymentsEngine` instance per thread. The transactions would be partitioned using a uniform hash over the `client_id` and sent to the corresponding thread for processing using a channel. That way, all the transactions for a certain client would always go to the same thread, while keeping the load distributed across all the worker threads. At the end all the individual reports would be gathered and merged.
+The idea to introduce multi-threading was to keep the async code as it is, but build an advanced implementation of the trait `PaymentsEngine` that would spawn multiple threads, with one independent `InMemoryPaymentsEngine` instance per thread. The transactions would be partitioned using a uniform hash over the `client_id` and sent to the corresponding thread for processing using a channel. That way, all the transactions for a certain client would always go to the same thread, while keeping the load distributed across all the worker threads. At the end all the individual reports would be gathered and merged.
 
 ![](architecture-parallel.png)
 
